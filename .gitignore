@@ -42,3 +42,5 @@ Thumbs.db
 # Testing & Coverage
 coverage/
 .system_generated/
+
+.vercel

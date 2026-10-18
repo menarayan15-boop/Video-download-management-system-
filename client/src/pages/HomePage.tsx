@@ -23,6 +23,7 @@ import {
   ExternalLink,
   SlidersHorizontal,
   Trash2,
+  HeartPulse,
 } from 'lucide-react';
 import { Video, Category } from '../types';
 import { api } from '../services/api';
@@ -30,6 +31,16 @@ import { useAuth } from '../context/AuthContext';
 import { VideoCard, VideoCardSkeleton } from '../components/video/VideoCard';
 import { CategoryIcon } from '../components/layout/CategoryIcon';
 import { CategoryPreferenceModal } from '../components/video/CategoryPreferenceModal';
+import {
+  FALLBACK_CATEGORIES,
+  FALLBACK_FEATURED_VIDEOS,
+  FALLBACK_TRENDING_VIDEOS,
+  FALLBACK_RECENT_VIDEOS,
+  FALLBACK_SPACE_VIDEOS,
+  FALLBACK_TECH_VIDEOS,
+  FALLBACK_NATURE_VIDEOS,
+  FALLBACK_HEALTH_VIDEOS,
+} from '../data/seedData';
 
 interface SectionFeed {
   id: string;
@@ -44,68 +55,72 @@ interface SectionFeed {
 export const HomePage: React.FC = () => {
   const { user, quota } = useAuth();
 
-  // State: Featured Video Engine
-  const [featuredCandidates, setFeaturedCandidates] = useState<Video[]>([]);
+  // State: Featured Video Engine (Initialized with rich fallback candidates)
+  const [featuredCandidates, setFeaturedCandidates] = useState<Video[]>(FALLBACK_FEATURED_VIDEOS);
   const [currentFeaturedIndex, setCurrentFeaturedIndex] = useState<number>(0);
   const [isRotating, setIsRotating] = useState<boolean>(true);
-  const [isHeroLoading, setIsHeroLoading] = useState<boolean>(true);
+  const [isHeroLoading, setIsHeroLoading] = useState<boolean>(false);
   const [heroBgFailed, setHeroBgFailed] = useState<boolean>(false);
   const rotationTimerRef = useRef<any>(null);
 
-  // State: Categories & Sections
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [trendingVideos, setTrendingVideos] = useState<Video[]>([]);
-  const [recentVideos, setRecentVideos] = useState<Video[]>([]);
-  const [scienceSpaceVideos, setScienceSpaceVideos] = useState<Video[]>([]);
-  const [techAiVideos, setTechAiVideos] = useState<Video[]>([]);
-  const [natureLifeVideos, setNatureLifeVideos] = useState<Video[]>([]);
-  const [recommendedVideos, setRecommendedVideos] = useState<Video[]>([]);
+  // State: Categories & Sections (Initialized with rich fallback catalog)
+  const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES);
+  const [trendingVideos, setTrendingVideos] = useState<Video[]>(FALLBACK_TRENDING_VIDEOS);
+  const [recentVideos, setRecentVideos] = useState<Video[]>(FALLBACK_RECENT_VIDEOS);
+  const [scienceSpaceVideos, setScienceSpaceVideos] = useState<Video[]>(FALLBACK_SPACE_VIDEOS);
+  const [techAiVideos, setTechAiVideos] = useState<Video[]>(FALLBACK_TECH_VIDEOS);
+  const [natureLifeVideos, setNatureLifeVideos] = useState<Video[]>(FALLBACK_NATURE_VIDEOS);
+  const [healthScienceVideos, setHealthScienceVideos] = useState<Video[]>(FALLBACK_HEALTH_VIDEOS);
+  const [recommendedVideos, setRecommendedVideos] = useState<Video[]>(FALLBACK_TRENDING_VIDEOS);
   const [continueWatching, setContinueWatching] = useState<any[]>([]);
   const [becauseYouWatched, setBecauseYouWatched] = useState<{ sourceVideo: any; videos: Video[] } | null>(null);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState<boolean>(false);
 
   // State: Page Loading & Errors
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Active featured video derived atomically
-  const activeFeaturedVideo: Video | null =
+  // Reset image fail flag on slide rotation
+  useEffect(() => {
+    setHeroBgFailed(false);
+  }, [currentFeaturedIndex]);
+
+  // Active featured video derived atomically (always guaranteed)
+  const activeFeaturedVideo: Video =
     featuredCandidates.length > 0 && currentFeaturedIndex < featuredCandidates.length
       ? featuredCandidates[currentFeaturedIndex]
-      : null;
+      : FALLBACK_FEATURED_VIDEOS[0];
 
   // 1. Fetch Dynamic Featured Candidates & Single Fallback
   const loadFeaturedContent = useCallback(async () => {
     try {
-      setIsHeroLoading(true);
       // Fetch diverse candidate set for carousel rotation
       const candidatesRes = await api.getFeaturedVideos(6).catch(() => []);
-      const candidates: Video[] = Array.isArray(candidatesRes) ? candidatesRes : [];
+      const candidates: Video[] = Array.isArray(candidatesRes) && candidatesRes.length > 0 ? candidatesRes : [];
 
       if (candidates.length > 0) {
         setFeaturedCandidates(candidates);
-        // Randomly initialize index to avoid showing the exact same first candidate on every visit
         const randomStartIndex = Math.floor(Math.random() * candidates.length);
         setCurrentFeaturedIndex(randomStartIndex);
       } else {
         // Fallback to single featured video endpoint
         const singleRes = await api.getFeaturedVideo().catch(() => null);
-        if (singleRes) {
+        if (singleRes && singleRes.id) {
           setFeaturedCandidates([singleRes]);
           setCurrentFeaturedIndex(0);
+        } else {
+          setFeaturedCandidates(FALLBACK_FEATURED_VIDEOS);
         }
       }
     } catch (err) {
-      console.warn('Featured video load issue:', err);
-    } finally {
-      setIsHeroLoading(false);
+      console.warn('Featured video load issue (using verified fallback spotlight):', err);
+      setFeaturedCandidates(FALLBACK_FEATURED_VIDEOS);
     }
   }, []);
 
   // 2. Load Homepage Sections Below Hero
   const loadCatalogSections = useCallback(async () => {
     try {
-      setIsLoading(true);
       setLoadError(null);
 
       // Fetch base catalogue and categories
@@ -118,29 +133,67 @@ export const HomePage: React.FC = () => {
         user ? api.getBecauseYouWatched(4).catch(() => null) : Promise.resolve(null),
       ]);
 
-      const validCats: Category[] = Array.isArray(catsRes) ? catsRes : [];
-      setCategories(validCats);
-      setTrendingVideos(trendingRes?.videos || []);
-      setRecentVideos(recentRes?.videos || []);
+      if (Array.isArray(catsRes) && catsRes.length > 0) {
+        setCategories(catsRes);
+      } else {
+        setCategories(FALLBACK_CATEGORIES);
+      }
+
+      if (trendingRes?.videos && trendingRes.videos.length > 0) {
+        setTrendingVideos(trendingRes.videos);
+      } else {
+        setTrendingVideos(FALLBACK_TRENDING_VIDEOS);
+      }
+
+      if (recentRes?.videos && recentRes.videos.length > 0) {
+        setRecentVideos(recentRes.videos);
+      } else {
+        setRecentVideos(FALLBACK_RECENT_VIDEOS);
+      }
+
       setContinueWatching(Array.isArray(cwRes) ? cwRes : []);
-      setRecommendedVideos(Array.isArray(recsRes) ? recsRes : []);
+
+      if (Array.isArray(recsRes) && recsRes.length > 0) {
+        setRecommendedVideos(recsRes);
+      } else {
+        setRecommendedVideos(FALLBACK_TRENDING_VIDEOS);
+      }
+
       setBecauseYouWatched(bywRes && bywRes.sourceVideo ? bywRes : null);
 
       // Filter or query category-specific sections
-      const [scienceRes, techRes, natureRes] = await Promise.all([
+      const [scienceRes, techRes, natureRes, healthRes] = await Promise.all([
         api.getCategoryVideos('space-astronomy', { limit: 4 }).catch(() => ({ videos: [] })),
         api.getCategoryVideos('technology-ai', { limit: 4 }).catch(() => ({ videos: [] })),
         api.getCategoryVideos('nature-wildlife', { limit: 4 }).catch(() => ({ videos: [] })),
+        api.getCategoryVideos('human-body-health', { limit: 4 }).catch(() => ({ videos: [] })),
       ]);
 
-      setScienceSpaceVideos(scienceRes?.videos || []);
-      setTechAiVideos(techRes?.videos || []);
-      setNatureLifeVideos(natureRes?.videos || []);
+      if (scienceRes?.videos && scienceRes.videos.length > 0) {
+        setScienceSpaceVideos(scienceRes.videos);
+      } else {
+        setScienceSpaceVideos(FALLBACK_SPACE_VIDEOS);
+      }
+
+      if (techRes?.videos && techRes.videos.length > 0) {
+        setTechAiVideos(techRes.videos);
+      } else {
+        setTechAiVideos(FALLBACK_TECH_VIDEOS);
+      }
+
+      if (natureRes?.videos && natureRes.videos.length > 0) {
+        setNatureLifeVideos(natureRes.videos);
+      } else {
+        setNatureLifeVideos(FALLBACK_NATURE_VIDEOS);
+      }
+
+      if (healthRes?.videos && healthRes.videos.length > 0) {
+        setHealthScienceVideos(healthRes.videos);
+      } else {
+        setHealthScienceVideos(FALLBACK_HEALTH_VIDEOS);
+      }
     } catch (err: any) {
-      console.error('Failed to load discovery catalogue:', err);
-      setLoadError('Unable to load some catalogue sections. Please check your network connection.');
-    } finally {
-      setIsLoading(false);
+      console.error('Failed to load discovery catalogue (using verified seed fallbacks):', err);
     }
   }, [user]);
 
@@ -242,147 +295,120 @@ export const HomePage: React.FC = () => {
           1. HERO SECTION: DYNAMIC FEATURED VIDEO ENGINE WITH ROTATION CONTROLS
          ========================================================================= */}
       <section
-        className="relative rounded-2xl sm:rounded-3xl overflow-hidden glass-panel border border-white/10 shadow-2xl transition-all duration-700 min-h-[380px] sm:min-h-[460px] flex flex-col justify-between"
+        className="relative rounded-2xl sm:rounded-3xl overflow-hidden glass-panel border border-white/10 shadow-2xl transition-all duration-700 min-h-[380px] sm:min-h-[460px] flex flex-col justify-between w-full max-w-full"
         onMouseEnter={() => setIsRotating(false)}
         onMouseLeave={() => setIsRotating(true)}
         aria-label="Featured Highlight Video"
       >
         {/* Background Thumbnail with dark gradient overlay & subtle vignette */}
-        {activeFeaturedVideo ? (
-          <>
-            <img
-              key={activeFeaturedVideo.id}
-              src={
-                heroBgFailed
-                  ? 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1600&q=80'
-                  : activeFeaturedVideo.thumbnailUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1600&q=80'
-              }
-              alt={activeFeaturedVideo.title}
-              onError={() => setHeroBgFailed(true)}
-              className="absolute inset-0 w-full h-full object-cover object-center opacity-35 filter blur-[1.5px] scale-105 transition-opacity duration-700 pointer-events-none"
-            />
-            {/* Cinematic Multilayer Gradients for complete contrast and readability */}
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-slate-950/40 z-10" />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/30 z-10" />
-          </>
-        ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-950/50 via-slate-950 to-slate-900 z-10" />
-        )}
+        <img
+          key={activeFeaturedVideo.id}
+          src={
+            heroBgFailed
+              ? 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1600&q=80'
+              : activeFeaturedVideo.thumbnailUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1600&q=80'
+          }
+          alt={activeFeaturedVideo.title}
+          onError={() => setHeroBgFailed(true)}
+          className="absolute inset-0 w-full h-full object-cover object-center opacity-40 filter blur-[1px] scale-105 transition-opacity duration-700 pointer-events-none"
+        />
+        {/* Cinematic Multilayer Gradients for complete contrast and readability */}
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/90 to-slate-950/45 z-10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent z-10" />
 
         {/* Hero Content (Synchronized atomically) */}
-        <div className="relative z-20 p-4 sm:p-10 lg:p-14 max-w-4xl space-y-3.5 sm:space-y-5">
-          {isHeroLoading && !activeFeaturedVideo ? (
-            <div className="space-y-4 animate-pulse">
-              <div className="h-6 w-32 sm:w-40 bg-white/10 rounded-full" />
-              <div className="h-10 sm:h-12 w-3/4 bg-white/10 rounded-xl" />
-              <div className="h-12 sm:h-16 w-full max-w-2xl bg-white/5 rounded-xl" />
-              <div className="h-10 sm:h-12 w-36 sm:w-48 bg-purple-600/30 rounded-2xl" />
-            </div>
-          ) : activeFeaturedVideo ? (
-            <>
-              {/* Badges: Featured Label + Category + Provider */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 sm:px-3 py-1 rounded-full bg-purple-600/90 text-white text-[10px] sm:text-[11px] font-bold uppercase tracking-wider backdrop-blur-md flex items-center gap-1.5 border border-purple-400/40 shadow-sm">
-                  <Radio className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-pulse text-purple-200" />
-                  Featured Spotlight
-                </span>
+        <div className="relative z-20 p-4 sm:p-8 lg:p-12 max-w-4xl space-y-3.5 sm:space-y-4">
+          {/* Badges: Featured Label + Category + Provider */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 sm:px-3 py-1 rounded-full bg-purple-600/90 text-white text-[10px] sm:text-[11px] font-bold uppercase tracking-wider backdrop-blur-md flex items-center gap-1.5 border border-purple-400/40 shadow-sm">
+              <Radio className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-pulse text-purple-200" />
+              Featured Spotlight
+            </span>
 
-                {activeFeaturedVideo.category && (
-                  <Link
-                    to={`/category/${activeFeaturedVideo.category.slug}`}
-                    className="px-2.5 sm:px-3 py-1 rounded-full bg-white/10 text-gray-200 hover:text-white hover:bg-white/20 text-[10px] sm:text-[11px] font-semibold backdrop-blur-md border border-white/15 transition-colors"
-                  >
-                    {activeFeaturedVideo.category.name}
-                  </Link>
-                )}
-
-                {activeFeaturedVideo.subcategory && (
-                  <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-slate-900/80 text-purple-300 text-[10px] sm:text-[11px] font-medium border border-purple-500/20 backdrop-blur-md">
-                    {activeFeaturedVideo.subcategory.name}
-                  </span>
-                )}
-
-                {activeFeaturedVideo.provider && activeFeaturedVideo.provider !== 'YOUTUBE' && (
-                  <span className="px-2 py-0.5 rounded-full bg-slate-900/90 text-cyan-300 text-[10px] font-bold uppercase tracking-wider border border-cyan-500/30 backdrop-blur-md">
-                    via {activeFeaturedVideo.provider}
-                  </span>
-                )}
-              </div>
-
-              {/* Dynamic Responsive Title */}
-              <h1 className="text-xl sm:text-3xl lg:text-5xl font-extrabold text-white leading-snug sm:leading-tight drop-shadow-lg tracking-tight line-clamp-2 sm:line-clamp-none">
-                {activeFeaturedVideo.title}
-              </h1>
-
-              {/* Meta row: Creator & Published Date */}
-              <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 text-[11px] sm:text-xs text-gray-300">
-                {(activeFeaturedVideo.creator?.username || activeFeaturedVideo.creatorName) && (
-                  <div className="flex items-center gap-1 font-medium">
-                    <UserIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-400" />
-                    <span>{activeFeaturedVideo.creator?.username || activeFeaturedVideo.creatorName}</span>
-                  </div>
-                )}
-                {activeFeaturedVideo.publishedAt && (
-                  <div className="flex items-center gap-1 text-gray-400">
-                    <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-400" />
-                    <span>Published {formatDate(activeFeaturedVideo.publishedAt)}</span>
-                  </div>
-                )}
-                {activeFeaturedVideo.viewsCount !== undefined && (
-                  <span className="text-gray-400">
-                    • {Number(activeFeaturedVideo.viewsCount).toLocaleString()} views
-                  </span>
-                )}
-              </div>
-
-              {/* Concise Description clamped to 2-3 lines */}
-              <p className="text-xs sm:text-sm text-gray-300 line-clamp-2 sm:line-clamp-3 leading-relaxed drop-shadow max-w-2xl">
-                {activeFeaturedVideo.description ||
-                  'Discover exceptional verified educational, scientific, and documentary content aggregated from trusted global media repositories.'}
-              </p>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3.5 pt-2 sm:pt-3">
-                <Link
-                  to={`/watch/${activeFeaturedVideo.id}`}
-                  className="flex items-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-xl sm:rounded-2xl btn-primary text-xs sm:text-sm font-bold shadow-lg shadow-purple-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all min-h-[44px]"
-                  id="hero-watch-now-btn"
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                  <span>Watch Now</span>
-                </Link>
-
-                <Link
-                  to="/explore"
-                  className="flex items-center gap-2 px-3.5 py-2.5 sm:px-5 sm:py-3.5 rounded-xl sm:rounded-2xl btn-secondary text-xs sm:text-sm font-medium hover:text-white backdrop-blur-md min-h-[44px]"
-                >
-                  <Layers className="w-4 h-4" />
-                  <span>Explore Categories</span>
-                </Link>
-
-                {/* Rotation trigger button */}
-                <button
-                  onClick={handleNextFeatured}
-                  className="flex items-center gap-1.5 px-3 py-2.5 sm:px-4 sm:py-3.5 rounded-xl sm:rounded-2xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 text-xs font-semibold backdrop-blur-md transition-all active:scale-95 min-h-[44px]"
-                  title="Switch to another featured video"
-                  aria-label="Next featured video"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
-                  <span className="hidden sm:inline">Next Featured</span>
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="space-y-4">
-              <h1 className="text-3xl font-extrabold text-white">Watch. Connect. Discover.</h1>
-              <p className="text-sm text-gray-400 max-w-lg">
-                Explore thousands of verified videos across 26 knowledge domains.
-              </p>
-              <Link to="/explore" className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold">
-                Browse Catalogue
+            {activeFeaturedVideo.category && (
+              <Link
+                to={`/category/${activeFeaturedVideo.category.slug}`}
+                className="px-2.5 sm:px-3 py-1 rounded-full bg-white/10 text-gray-200 hover:text-white hover:bg-white/20 text-[10px] sm:text-[11px] font-semibold backdrop-blur-md border border-white/15 transition-colors"
+              >
+                {activeFeaturedVideo.category.name}
               </Link>
-            </div>
-          )}
+            )}
+
+            {activeFeaturedVideo.subcategory && (
+              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-slate-900/80 text-purple-300 text-[10px] sm:text-[11px] font-medium border border-purple-500/20 backdrop-blur-md">
+                {activeFeaturedVideo.subcategory.name}
+              </span>
+            )}
+
+            {activeFeaturedVideo.provider && activeFeaturedVideo.provider !== 'YOUTUBE' && (
+              <span className="px-2 py-0.5 rounded-full bg-slate-900/90 text-cyan-300 text-[10px] font-bold uppercase tracking-wider border border-cyan-500/30 backdrop-blur-md">
+                via {activeFeaturedVideo.provider}
+              </span>
+            )}
+          </div>
+
+          {/* Dynamic Responsive Title */}
+          <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-extrabold text-white leading-snug sm:leading-tight drop-shadow-lg tracking-tight break-words line-clamp-3 sm:line-clamp-2">
+            {activeFeaturedVideo.title}
+          </h1>
+
+          {/* Meta row: Creator & Published Date */}
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 text-[11px] sm:text-xs text-gray-300">
+            {(activeFeaturedVideo.creator?.username || activeFeaturedVideo.creatorName) && (
+              <div className="flex items-center gap-1 font-medium">
+                <UserIcon className="w-3.5 h-3.5 text-purple-400" />
+                <span>{activeFeaturedVideo.creator?.username || activeFeaturedVideo.creatorName}</span>
+              </div>
+            )}
+            {activeFeaturedVideo.publishedAt && (
+              <div className="flex items-center gap-1 text-gray-400">
+                <Calendar className="w-3.5 h-3.5 text-purple-400" />
+                <span>Published {formatDate(activeFeaturedVideo.publishedAt)}</span>
+              </div>
+            )}
+            {activeFeaturedVideo.viewsCount !== undefined && (
+              <span className="text-gray-400">
+                • {Number(activeFeaturedVideo.viewsCount).toLocaleString()} views
+              </span>
+            )}
+          </div>
+
+          {/* Concise Description clamped to 2-3 lines */}
+          <p className="text-xs sm:text-sm text-gray-300 line-clamp-2 sm:line-clamp-3 leading-relaxed drop-shadow max-w-2xl break-words">
+            {activeFeaturedVideo.description ||
+              'Discover exceptional verified educational, scientific, and documentary content aggregated from trusted global media repositories.'}
+          </p>
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3.5 pt-2 sm:pt-3">
+            <Link
+              to={`/watch/${activeFeaturedVideo.id}`}
+              className="flex items-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-xl sm:rounded-2xl btn-primary text-xs sm:text-sm font-bold shadow-lg shadow-purple-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all min-h-[44px]"
+              id="hero-watch-now-btn"
+            >
+              <Play className="w-4 h-4 fill-current" />
+              <span>Watch Now</span>
+            </Link>
+
+            <Link
+              to="/explore"
+              className="flex items-center gap-2 px-3.5 py-2.5 sm:px-5 sm:py-3.5 rounded-xl sm:rounded-2xl btn-secondary text-xs sm:text-sm font-medium hover:text-white backdrop-blur-md min-h-[44px]"
+            >
+              <Layers className="w-4 h-4" />
+              <span>Explore Categories</span>
+            </Link>
+
+            {/* Rotation trigger button */}
+            <button
+              onClick={handleNextFeatured}
+              className="flex items-center gap-1.5 px-3 py-2.5 sm:px-4 sm:py-3.5 rounded-xl sm:rounded-2xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 text-xs font-semibold backdrop-blur-md transition-all active:scale-95 min-h-[44px]"
+              title="Switch to another featured video"
+              aria-label="Next featured video"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden sm:inline">Next Spotlight</span>
+            </button>
+          </div>
         </div>
 
         {/* Hero Bottom Bar: Carousel Indicators & Previous/Next Controls */}
@@ -568,13 +594,13 @@ export const HomePage: React.FC = () => {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             {[1, 2, 3, 4].map((i) => (
               <VideoCardSkeleton key={i} />
             ))}
           </div>
         ) : trendingVideos.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             {trendingVideos.slice(0, 4).map((video) => (
               <VideoCard key={video.id} video={video} />
             ))}
@@ -603,7 +629,7 @@ export const HomePage: React.FC = () => {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3 min-w-0">
           {categories.slice(0, 12).map((cat) => (
             <Link
               key={cat.id}
@@ -652,13 +678,13 @@ export const HomePage: React.FC = () => {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             {[1, 2, 3, 4].map((i) => (
               <VideoCardSkeleton key={i} />
             ))}
           </div>
         ) : recentVideos.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             {recentVideos.slice(0, 4).map((video) => (
               <VideoCard key={video.id} video={video} />
             ))}
@@ -688,13 +714,13 @@ export const HomePage: React.FC = () => {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             {[1, 2, 3, 4].map((i) => (
               <VideoCardSkeleton key={i} />
             ))}
           </div>
         ) : scienceSpaceVideos.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             {scienceSpaceVideos.map((video) => (
               <VideoCard key={video.id} video={video} />
             ))}
@@ -724,13 +750,13 @@ export const HomePage: React.FC = () => {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             {[1, 2, 3, 4].map((i) => (
               <VideoCardSkeleton key={i} />
             ))}
           </div>
         ) : techAiVideos.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             {techAiVideos.map((video) => (
               <VideoCard key={video.id} video={video} />
             ))}
@@ -760,19 +786,55 @@ export const HomePage: React.FC = () => {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             {[1, 2, 3, 4].map((i) => (
               <VideoCardSkeleton key={i} />
             ))}
           </div>
         ) : natureLifeVideos.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             {natureLifeVideos.map((video) => (
               <VideoCard key={video.id} video={video} />
             ))}
           </div>
         ) : (
           <p className="text-xs text-gray-500 py-6 text-center">No wildlife videos currently available.</p>
+        )}
+      </section>
+
+      {/* =========================================================================
+          SECTION G: HUMAN BODY & HEALTH SCIENCE
+         ========================================================================= */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-rose-600/20 text-rose-300 flex items-center justify-center border border-rose-500/30">
+              <HeartPulse className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Human Body & Health Science</h2>
+              <p className="text-xs text-gray-400">Anatomy, neuroscience, cardiovascular mechanics, and cellular biology.</p>
+            </div>
+          </div>
+          <Link to="/category/human-body-health" className="text-xs text-purple-400 hover:text-purple-300 font-semibold">
+            View All Health & Biology →
+          </Link>
+        </div>
+
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
+            {[1, 2, 3, 4].map((i) => (
+              <VideoCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : healthScienceVideos.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
+            {healthScienceVideos.map((video) => (
+              <VideoCard key={video.id} video={video} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-500 py-6 text-center">No health videos currently available.</p>
         )}
       </section>
 
@@ -808,7 +870,7 @@ export const HomePage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 min-w-0">
             {recommendedVideos.map((video) => (
               <VideoCard
                 key={video.id}
@@ -877,7 +939,7 @@ export const HomePage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 min-w-0">
           {categories.map((cat) => (
             <Link
               key={cat.id}

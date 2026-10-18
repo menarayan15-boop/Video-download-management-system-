@@ -31,6 +31,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers,
   });
 
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('text/html')) {
+    throw new ApiError(
+      'API endpoint returned HTML (SPA rewrite). Backend service may be offline or starting.',
+      502,
+      'HTML_RESPONSE'
+    );
+  }
+
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {

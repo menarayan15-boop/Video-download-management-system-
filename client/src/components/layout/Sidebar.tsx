@@ -89,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed lg:sticky top-0 lg:top-16 left-0 z-50 lg:z-40 h-full lg:h-[calc(100vh-4rem)] w-72 lg:w-64 bg-[#0B0F19] lg:bg-transparent border-r border-white/10 flex flex-col justify-between p-4 shadow-2xl lg:shadow-none transition-transform duration-300 ease-in-out ${
+        className={`fixed lg:sticky top-0 lg:top-16 left-0 z-50 lg:z-40 h-full lg:h-[calc(100vh-4rem)] w-72 lg:w-64 flex-shrink-0 bg-[#0B0F19] lg:bg-transparent border-r border-white/10 flex flex-col justify-between p-4 shadow-2xl lg:shadow-none transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
         aria-label="Sidebar Navigation"
