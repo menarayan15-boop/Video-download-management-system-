@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Vyntra — Complete Full-Stack Video-Sharing and Creator Community Platform",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
     "dev:server": "npm run dev --workspace=server",
