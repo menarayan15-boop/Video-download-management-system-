@@ -1,0 +1,655 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  USER
+  CREATOR
+  ADMIN
+}
+
+enum Visibility {
+  PUBLIC
+  UNLISTED
+  PRIVATE
+}
+
+enum ContentProvider {
+  VYNTRA
+  YOUTUBE
+  NASA
+  ARCHIVE
+  EXTERNAL
+}
+
+enum PlaybackType {
+  DIRECT
+  EMBED_YOUTUBE
+  EMBED_GENERIC
+  EXTERNAL_LINK
+}
+
+enum ContentStatus {
+  AVAILABLE
+  UNAVAILABLE
+  RESTRICTED
+  FLAGGED
+  HIDDEN
+}
+
+enum RightsStatus {
+  PUBLIC_DOMAIN
+  CREATIVE_COMMONS
+  EMBED_PERMITTED
+  STANDARD_LICENSE
+  PROPRIETARY
+}
+
+enum PlanName {
+  FREE
+  BRONZE
+  SILVER
+  GOLD
+}
+
+enum BillingInterval {
+  DAILY
+  MONTHLY
+  YEARLY
+}
+
+enum QuotaPeriod {
+  DAILY
+  MONTHLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PENDING
+  CANCELLED
+  EXPIRED
+}
+
+enum DownloadStatus {
+  REQUESTED
+  AUTHORIZED
+  RESERVED
+  TRANSFERRING
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String
+  avatarUrl    String?
+  biography    String?
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  videos             Video[]
+  subscriptions      UserSubscription[]
+  downloadOperations DownloadOperation[]
+  downloadHistory    DownloadHistory[]
+  likes              Like[]
+  comments           Comment[]
+  commentLikes       CommentLike[]
+  following          Follow[]            @relation("UserFollowing")
+  followers          Follow[]            @relation("UserFollowers")
+  savedVideos        SavedVideo[]
+  watchHistory       WatchHistory[]
+  notifications      Notification[]
+  reportsSubmitted   UserReport[]        @relation("ReportReporter")
+  registeredDevices  RegisteredDevice[]
+  payments           PaymentRecord[]
+  playlists          Playlist[]
+  videoNotes         VideoNote[]
+  videoBookmarks     VideoBookmark[]
+  recommendationFeedback RecommendationFeedback[]
+  categoryPreferences UserCategoryPreference[]
+  searchHistory      SearchHistory[]
+  preference         UserPreference?
+
+  @@map("users")
+}
+
+model Category {
+  id           String        @id @default(uuid())
+  name         String        @unique
+  slug         String        @unique
+  description  String?
+  icon         String?
+  displayOrder Int           @default(0)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  videos                 Video[]
+  subcategories          Subcategory[]
+  userCategoryPreferences UserCategoryPreference[]
+  recommendationFeedback RecommendationFeedback[]
+
+  @@map("categories")
+}
+
+model Subcategory {
+  id           String   @id @default(uuid())
+  categoryId   String
+  name         String
+  slug         String
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  videos   Video[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId, displayOrder])
+  @@map("subcategories")
+}
+
+model Video {
+  id                String          @id @default(uuid())
+  creatorId         String?
+  title             String
+  slug              String?
+  description       String?         @db.Text
+  thumbnailUrl      String
+  storageKey        String?
+  videoUrl          String?
+  embedUrl          String?
+  originalUrl       String?
+  provider          ContentProvider @default(VYNTRA)
+  providerVideoId   String?
+  playbackType      PlaybackType    @default(DIRECT)
+  durationSeconds   Int             @default(0)
+  fileSizeBytes     BigInt          @default(0)
+  categoryId        String
+  subcategoryId     String?
+  language          String?         @default("en")
+  visibility        Visibility      @default(PUBLIC)
+  downloadAllowed   Boolean         @default(true)
+  viewsCount        Int             @default(0)
+  creatorName       String?
+  creatorChannelUrl String?
+  contentStatus     ContentStatus   @default(AVAILABLE)
+  rightsStatus      RightsStatus    @default(EMBED_PERMITTED)
+  licenseName       String?
+  attributionText   String?
+  tags              String[]        @default([])
+  metadataJson      String?         @db.Text
+  publishedAt       DateTime        @default(now())
+  importedAt        DateTime        @default(now())
+  lastCheckedAt     DateTime        @default(now())
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  creator            User?               @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  category           Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  subcategory        Subcategory?        @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  likes              Like[]
+  comments           Comment[]
+  savedBy            SavedVideo[]
+  watchHistory       WatchHistory[]
+  downloadOperations DownloadOperation[]
+  downloadHistory    DownloadHistory[]
+  sourceEvents       VideoSourceEvent[]
+  playlistItems      PlaylistItem[]
+  notes              VideoNote[]
+  bookmarks          VideoBookmark[]
+  recommendationFeedback RecommendationFeedback[]
+
+  @@unique([provider, providerVideoId])
+  @@index([creatorId])
+  @@index([categoryId])
+  @@index([subcategoryId])
+  @@index([provider, contentStatus])
+  @@index([visibility, publishedAt])
+  @@map("videos")
+}
+
+model SubscriptionPlan {
+  id              String          @id @default(uuid())
+  name            PlanName        @unique
+  displayName     String
+  price           Float           @default(0.0)
+  billingInterval BillingInterval @default(MONTHLY)
+  downloadLimit   Int             @default(1)
+  quotaPeriod     QuotaPeriod     @default(DAILY)
+  deviceLimit     Int             @default(1)
+  features        String          @db.Text // JSON string of features
+  badgeColor      String?
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  subscriptions UserSubscription[]
+
+  @@map("subscription_plans")
+}
+
+model UserSubscription {
+  id                       String             @id @default(uuid())
+  userId                   String
+  planId                   String
+  status                   SubscriptionStatus @default(ACTIVE)
+  startsAt                 DateTime           @default(now())
+  expiresAt                DateTime?
+  autoRenew                Boolean            @default(true)
+  paymentProviderReference String?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan               SubscriptionPlan    @relation(fields: [planId], references: [id], onDelete: Restrict)
+  downloadOperations DownloadOperation[]
+  payments           PaymentRecord[]
+
+  @@index([userId, status])
+  @@map("user_subscriptions")
+}
+
+model DownloadOperation {
+  id                 String         @id @default(uuid())
+  userId             String
+  videoId            String
+  subscriptionId     String?
+  idempotencyKeyHash String         @unique
+  status             DownloadStatus @default(REQUESTED)
+  quotaPeriodStart   DateTime
+  quotaPeriodEnd     DateTime
+  quotaReserved      Int            @default(1)
+  quotaConsumed      Int            @default(0)
+  requestedAt        DateTime       @default(now())
+  startedAt          DateTime?
+  completedAt        DateTime?
+  expiresAt          DateTime?
+  failureCode        String?
+  fileSizeBytes      BigInt?
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video        Video             @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  subscription UserSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  history      DownloadHistory[]
+
+  @@index([userId, status])
+  @@index([userId, quotaPeriodStart, quotaPeriodEnd])
+  @@index([expiresAt])
+  @@map("download_operations")
+}
+
+model DownloadHistory {
+  id                  String   @id @default(uuid())
+  downloadOperationId String
+  userId              String
+  videoId             String
+  eventType           String
+  status              String
+  eventTimestamp      DateTime @default(now())
+  metadata            String?  @db.Text // JSON details
+
+  downloadOperation DownloadOperation @relation(fields: [downloadOperationId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video             Video             @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([userId, eventTimestamp])
+  @@index([downloadOperationId])
+  @@map("download_history")
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  userId    String
+  videoId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@map("likes")
+}
+
+model Comment {
+  id                String   @id @default(uuid())
+  userId            String
+  videoId           String
+  parentId          String?
+  content           String   @db.Text
+  isEdited          Boolean  @default(false)
+  translatedContent String?  @db.Text
+  translationLang   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video        Video         @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  parent       Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      Comment[]     @relation("CommentReplies")
+  commentLikes CommentLike[]
+
+  @@index([videoId, createdAt])
+  @@map("comments")
+}
+
+model CommentLike {
+  id        String   @id @default(uuid())
+  userId    String
+  commentId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@map("comment_likes")
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@map("follows")
+}
+
+model SavedVideo {
+  id        String   @id @default(uuid())
+  userId    String
+  videoId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@map("saved_videos")
+}
+
+model WatchHistory {
+  id              String   @id @default(uuid())
+  userId          String
+  videoId         String
+  progressSeconds Int      @default(0)
+  completed       Boolean  @default(false)
+  lastWatchedAt   DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@map("watch_history")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String // LIKE, COMMENT, REPLY, FOLLOW, DOWNLOAD_SUCCESS, DOWNLOAD_FAILED, QUOTA_RESET, SUBSCRIPTION
+  title     String
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+model UserReport {
+  id          String       @id @default(uuid())
+  reporterId  String
+  targetType  String // VIDEO, COMMENT, USER
+  targetId    String
+  reason      String
+  details     String?      @db.Text
+  status      ReportStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  reviewedAt  DateTime?
+
+  reporter User @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("user_reports")
+}
+
+model RegisteredDevice {
+  id               String   @id @default(uuid())
+  userId           String
+  deviceName       String
+  deviceIdentifier String
+  ipAddress        String?
+  lastActiveAt     DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceIdentifier])
+  @@map("registered_devices")
+}
+
+model PaymentRecord {
+  id             String   @id @default(uuid())
+  userId         String
+  subscriptionId String?
+  amount         Float
+  currency       String   @default("INR")
+  status         String // SUCCESS, PENDING, FAILED
+  provider       String   @default("DEV_SIMULATOR")
+  providerTxId   String?
+  createdAt      DateTime @default(now())
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription UserSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@map("payment_records")
+}
+
+model VideoProvider {
+  id              String          @id @default(uuid())
+  name            String          @unique
+  providerType    ContentProvider @unique
+  isEnabled       Boolean         @default(true)
+  configuration   String?         @db.Text
+  lastSyncAt      DateTime?
+  lastSyncStatus  String?
+  lastError       String?         @db.Text
+  totalDiscovered Int             @default(0)
+  totalImported   Int             @default(0)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  syncJobs ContentSyncJob[]
+
+  @@map("video_providers")
+}
+
+model ContentSyncJob {
+  id              String          @id @default(uuid())
+  provider        ContentProvider
+  categoryId      String?
+  status          String          @default("PENDING") // PENDING, RUNNING, COMPLETED, FAILED
+  startedAt       DateTime        @default(now())
+  completedAt     DateTime?
+  itemsDiscovered Int             @default(0)
+  itemsImported   Int             @default(0)
+  itemsSkipped    Int             @default(0)
+  errorSummary    String?         @db.Text
+
+  videoProvider VideoProvider? @relation(fields: [provider], references: [providerType], onDelete: Cascade)
+
+  @@index([provider, status])
+  @@map("content_sync_jobs")
+}
+
+model VideoSourceEvent {
+  id        String   @id @default(uuid())
+  videoId   String
+  eventType String   // SYNC_CHECK, PLAYBACK_VERIFIED, UNAVAILABLE_DETECTED, METADATA_UPDATED
+  checkedAt DateTime @default(now())
+  details   String?  @db.Text
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId, checkedAt])
+  @@map("video_source_events")
+}
+
+enum FeedbackType {
+  NOT_INTERESTED
+  SHOW_FEWER
+  HIDE_SOURCE
+  REMOVE
+}
+
+model RecommendationFeedback {
+  id           String           @id @default(uuid())
+  userId       String
+  videoId      String?
+  categoryId   String?
+  provider     ContentProvider?
+  feedbackType FeedbackType
+  reason       String?
+  createdAt    DateTime         @default(now())
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video    Video?           @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  category Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([userId, feedbackType])
+  @@map("recommendation_feedback")
+}
+
+model UserCategoryPreference {
+  id         String   @id @default(uuid())
+  userId     String
+  categoryId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId])
+  @@map("user_category_preferences")
+}
+
+model SearchHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  query     String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("search_history")
+}
+
+model Playlist {
+  id          String   @id @default(uuid())
+  userId      String
+  title       String
+  description String?  @db.Text
+  isPrivate   Boolean  @default(true)
+  shareToken  String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items PlaylistItem[]
+
+  @@index([userId, createdAt])
+  @@map("playlists")
+}
+
+model PlaylistItem {
+  id         String   @id @default(uuid())
+  playlistId String
+  videoId    String
+  order      Int      @default(0)
+  addedAt    DateTime @default(now())
+
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  video    Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, videoId])
+  @@index([playlistId, order])
+  @@map("playlist_items")
+}
+
+model VideoBookmark {
+  id               String   @id @default(uuid())
+  userId           String
+  videoId          String
+  timestampSeconds Int
+  title            String
+  createdAt        DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([userId, videoId])
+  @@map("video_bookmarks")
+}
+
+model VideoNote {
+  id               String   @id @default(uuid())
+  userId           String
+  videoId          String
+  timestampSeconds Int?
+  content          String   @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([userId, videoId])
+  @@map("video_notes")
+}
+
+model UserPreference {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  preferredLanguage  String   @default("en")
+  captionsEnabled    Boolean  @default(false)
+  reducedMotion      Boolean  @default(false)
+  fontSize           String   @default("medium") // small, medium, large
+  autoplay           Boolean  @default(true)
+  soundOn            Boolean  @default(true)
+  theme              String   @default("dark") // dark, high-contrast
+  emailNotifications Boolean  @default(true)
+  inAppNotifications Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
