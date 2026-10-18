@@ -263,9 +263,12 @@ export const FALLBACK_RECENT_VIDEOS: Video[] = [
     id: '5033eb6b-neural-networks-05',
     title: 'Understand Artificial Neural Networks from Mathematical First Principles',
     description: 'Comprehensive intuitive guide covering forward propagation, loss landscapes, backpropagation, and gradient descent.',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=1200&auto=format&fit=crop&q=80',
-    videoUrl: 'https://archive.org/download/Tears-of-Steel/tears_of_steel_720p.mp4',
+    thumbnailUrl: 'https://i.ytimg.com/vi/1TmUwRALJW0/maxresdefault.jpg',
+    videoUrl: undefined,
+    embedUrl: 'https://www.youtube.com/embed/1TmUwRALJW0',
     provider: 'YOUTUBE',
+    playbackType: 'EMBED_YOUTUBE',
+    providerVideoId: '1TmUwRALJW0',
     durationSeconds: 520,
     viewsCount: 21400,
     creatorName: 'Gate Smashers',
@@ -541,7 +544,10 @@ export const ALL_FALLBACK_VIDEOS: Video[] = [
 ];
 
 export function findFallbackVideo(id: string): Video | undefined {
-  return ALL_FALLBACK_VIDEOS.find((v) => v.id === id);
+  if (id === '5033eb6b-e4cb-4409-8a23-2a2df25bb765') {
+    return ALL_FALLBACK_VIDEOS.find((v) => v.id === '5033eb6b-neural-networks-05' || v.id === id);
+  }
+  return ALL_FALLBACK_VIDEOS.find((v) => v.id === id || (v.providerVideoId && v.providerVideoId === id));
 }
 
 export const FALLBACK_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [

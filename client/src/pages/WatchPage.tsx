@@ -23,6 +23,7 @@ import { VideoCard } from '../components/video/VideoCard';
 import { AddToPlaylistModal } from '../components/video/AddToPlaylistModal';
 import { ReportVideoModal } from '../components/video/ReportVideoModal';
 import { LearningToolsPanel } from '../components/video/LearningToolsPanel';
+import { VideoPlayerErrorBoundary } from '../components/video/VideoPlayerErrorBoundary';
 import { findFallbackVideo, FALLBACK_FEATURED_VIDEOS, FALLBACK_TRENDING_VIDEOS } from '../data/seedData';
 
 export const WatchPage: React.FC = () => {
@@ -31,7 +32,7 @@ export const WatchPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [video, setVideo] = useState<Video | null>(() => {
-    return id ? findFallbackVideo(id) || null : null;
+    return id ? api.getCachedVideo(id) || findFallbackVideo(id) || null : null;
   });
   const [userState, setUserState] = useState<{
     isLiked: boolean;
@@ -44,53 +45,68 @@ export const WatchPage: React.FC = () => {
     isFollowingCreator: false,
     watchProgress: null,
   });
-  const [relatedVideos, setRelatedVideos] = useState<Video[]>([]);
+  const [relatedVideos, setRelatedVideos] = useState<Video[]>(() => {
+    const initial = id ? api.getCachedVideo(id) || findFallbackVideo(id) : null;
+    return initial ? FALLBACK_TRENDING_VIDEOS.filter((v) => v.id !== initial.id) : FALLBACK_TRENDING_VIDEOS;
+  });
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [showShareToast, setShowShareToast] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
   const [seekTarget, setSeekTarget] = useState<number | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(!video);
 
   useEffect(() => {
-    if (id) {
-      const initialFallback = findFallbackVideo(id);
-      if (initialFallback) {
-        setVideo(initialFallback);
-        setRelatedVideos(FALLBACK_TRENDING_VIDEOS.filter((v) => v.id !== initialFallback.id));
-      }
+    if (!id) return;
 
-      api.getVideoById(id)
-        .then((res) => {
-          if (res && res.video) {
-            setVideo(res.video);
-            setUserState(
-              res.userState || {
-                isLiked: false,
-                isSaved: false,
-                isFollowingCreator: false,
-                watchProgress: null,
-              }
-            );
-            if (Array.isArray(res.relatedVideos) && res.relatedVideos.length > 0) {
-              setRelatedVideos(res.relatedVideos);
-            }
-          } else if (!video) {
-            const fb = findFallbackVideo(id) || FALLBACK_FEATURED_VIDEOS[0];
-            setVideo(fb);
-            setRelatedVideos(FALLBACK_TRENDING_VIDEOS.filter((v) => v.id !== fb.id));
-          }
-        })
-        .catch(() => {
-          if (!video) {
-            const fb = findFallbackVideo(id) || FALLBACK_FEATURED_VIDEOS[0];
-            setVideo(fb);
-            setRelatedVideos(FALLBACK_TRENDING_VIDEOS.filter((v) => v.id !== fb.id));
-          }
-        })
-        .finally(() => setIsLoading(false));
+    const controller = new AbortController();
+
+    // 1. Immediate synchronous fallback/cache check to avoid blank screen
+    const cached = api.getCachedVideo(id);
+    const fallback = cached || findFallbackVideo(id);
+    if (fallback) {
+      setVideo(fallback);
+      setRelatedVideos((prev) => (prev.length > 0 ? prev : FALLBACK_TRENDING_VIDEOS.filter((v) => v.id !== fallback.id)));
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
     }
+
+    // 2. Fetch fresh metadata and user-specific states with request cancellation
+    api.getVideoById(id, { signal: controller.signal })
+      .then((res) => {
+        if (res && res.video) {
+          setVideo(res.video);
+          setUserState(
+            res.userState || {
+              isLiked: false,
+              isSaved: false,
+              isFollowingCreator: false,
+              watchProgress: null,
+            }
+          );
+          if (Array.isArray(res.relatedVideos) && res.relatedVideos.length > 0) {
+            setRelatedVideos(res.relatedVideos);
+          }
+        } else {
+          const fb = findFallbackVideo(id) || FALLBACK_FEATURED_VIDEOS[0];
+          setVideo((prev) => prev || fb);
+          setRelatedVideos((prev) => (prev.length > 0 ? prev : FALLBACK_TRENDING_VIDEOS.filter((v) => v.id !== fb.id)));
+        }
+      })
+      .catch((err) => {
+        if (err?.name === 'AbortError') return;
+        console.warn('[Vyntra] Error fetching video by ID, using fallback:', err);
+        const fb = findFallbackVideo(id) || FALLBACK_FEATURED_VIDEOS[0];
+        setVideo((prev) => prev || fb);
+        setRelatedVideos((prev) => (prev.length > 0 ? prev : FALLBACK_TRENDING_VIDEOS.filter((v) => v.id !== fb.id)));
+      })
+      .finally(() => setIsLoading(false));
+
+    return () => {
+      controller.abort();
+    };
   }, [id]);
 
   const handleToggleLike = async () => {
@@ -135,11 +151,29 @@ export const WatchPage: React.FC = () => {
     setTimeout(() => setShowShareToast(false), 2000);
   };
 
-  if (isLoading) {
+  const handleCurrentTimeChange = React.useCallback((t: number) => {
+    setCurrentTimeSeconds(t);
+  }, []);
+
+  const handleOpenDownload = React.useCallback(() => {
+    setDownloadModalOpen(true);
+  }, []);
+
+  if (isLoading && !video) {
     return (
-      <div className="max-w-7xl mx-auto space-y-4">
-        <div className="aspect-video w-full rounded-2xl bg-white/5 animate-pulse" />
-        <div className="h-6 w-1/3 bg-white/5 rounded animate-pulse" />
+      <div className="max-w-7xl mx-auto space-y-6 animate-pulse">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="aspect-video w-full rounded-2xl bg-white/5 border border-white/10" />
+            <div className="h-7 w-2/3 bg-white/5 rounded-xl" />
+            <div className="h-10 w-full bg-white/5 rounded-xl" />
+          </div>
+          <div className="space-y-4">
+            <div className="h-6 w-32 bg-white/5 rounded-lg" />
+            <div className="aspect-video w-full rounded-2xl bg-white/5" />
+            <div className="aspect-video w-full rounded-2xl bg-white/5" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -169,14 +203,16 @@ export const WatchPage: React.FC = () => {
       {/* Main Layout: Left = Player + Details + Comments, Right = Related */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Player */}
-          <VideoPlayer
-            video={video}
-            initialProgressSeconds={userState.watchProgress?.progressSeconds || 0}
-            seekToSeconds={seekTarget}
-            onCurrentTimeChange={(t) => setCurrentTimeSeconds(t)}
-            onOpenDownload={() => setDownloadModalOpen(true)}
-          />
+          {/* Player isolated with error boundary */}
+          <VideoPlayerErrorBoundary video={video}>
+            <VideoPlayer
+              video={video}
+              initialProgressSeconds={userState.watchProgress?.progressSeconds || 0}
+              seekToSeconds={seekTarget}
+              onCurrentTimeChange={handleCurrentTimeChange}
+              onOpenDownload={handleOpenDownload}
+            />
+          </VideoPlayerErrorBoundary>
 
           {/* Video Metadata & Actions */}
           <div className="space-y-4">
@@ -321,15 +357,17 @@ export const WatchPage: React.FC = () => {
               <div className="flex items-center gap-4 text-gray-400 font-medium">
                 <span className="flex items-center gap-1">
                   <Eye className="w-3.5 h-3.5 text-purple-400" />
-                  {video.viewsCount.toLocaleString()} views
+                  {(video.viewsCount ?? 0).toLocaleString()} views
                 </span>
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5 text-purple-400" />
-                  {new Date(video.publishedAt).toLocaleDateString([], {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
+                  {video.publishedAt
+                    ? new Date(video.publishedAt).toLocaleDateString([], {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })
+                    : 'Recently added'}
                 </span>
                 {video.category && (
                   <span className="px-2 py-0.5 rounded-full bg-purple-950/50 text-purple-300 font-semibold border border-purple-500/20">

@@ -171,7 +171,7 @@ export const getVideoById = async (req: AuthRequest, res: Response, next: NextFu
       watchProgress = history ? { progressSeconds: history.progressSeconds, completed: history.completed } : null;
     }
 
-    // Fetch related videos in same category
+    // Fetch related videos in same category (lean field projection)
     const relatedVideos = await prisma.video.findMany({
       where: {
         categoryId: video.categoryId,
@@ -179,7 +179,17 @@ export const getVideoById = async (req: AuthRequest, res: Response, next: NextFu
         visibility: 'PUBLIC',
       },
       take: 6,
-      include: {
+      select: {
+        id: true,
+        title: true,
+        thumbnailUrl: true,
+        durationSeconds: true,
+        viewsCount: true,
+        provider: true,
+        providerVideoId: true,
+        fileSizeBytes: true,
+        publishedAt: true,
+        creatorName: true,
         creator: {
           select: { id: true, username: true, avatarUrl: true },
         },

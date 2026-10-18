@@ -17,6 +17,12 @@ import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { AddToPlaylistModal } from './AddToPlaylistModal';
 import { ReportVideoModal } from './ReportVideoModal';
+import {
+  extractYouTubeId,
+  getYouTubeThumbnailCascade,
+  getOptimizedThumbnail,
+  FALLBACK_THUMBNAIL_DATA_URL,
+} from '../../utils/imageOptimizer';
 
 interface VideoCardProps {
   video: Video & {
@@ -30,7 +36,7 @@ interface VideoCardProps {
   onRemoveContinueWatching?: (videoId: string) => void;
 }
 
-export const VideoCard: React.FC<VideoCardProps> = ({
+const VideoCardComponent: React.FC<VideoCardProps> = ({
   video,
   onLikeToggle,
   onSaveToggle,
@@ -48,8 +54,48 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
 
-  const [imgSrc, setImgSrc] = useState(video.thumbnailUrl || '/placeholder-thumb.jpg');
-  const [imgFailed, setImgFailed] = useState(false);
+  // Thumbnail cascade handling
+  const isYouTube =
+    video.provider === 'YOUTUBE' ||
+    video.playbackType === 'EMBED_YOUTUBE' ||
+    Boolean(video.embedUrl?.includes('youtube')) ||
+    Boolean(video.videoUrl?.includes('youtube') || video.videoUrl?.includes('youtu.be'));
+
+  const ytId = isYouTube
+    ? video.providerVideoId || extractYouTubeId(video.embedUrl) || extractYouTubeId(video.videoUrl)
+    : null;
+
+  const thumbnailCandidates = React.useMemo(() => {
+    if (ytId) {
+      return getYouTubeThumbnailCascade(ytId);
+    }
+    if (video.thumbnailUrl) {
+      return [getOptimizedThumbnail(video.thumbnailUrl, 480), video.thumbnailUrl];
+    }
+    return [FALLBACK_THUMBNAIL_DATA_URL];
+  }, [ytId, video.thumbnailUrl]);
+
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+
+  // Reset when video changes
+  useEffect(() => {
+    setCandidateIndex(0);
+    setThumbnailFailed(false);
+  }, [video.id]);
+
+  const currentThumbSrc = thumbnailFailed
+    ? FALLBACK_THUMBNAIL_DATA_URL
+    : thumbnailCandidates[candidateIndex] || FALLBACK_THUMBNAIL_DATA_URL;
+
+  const handleThumbError = () => {
+    if (candidateIndex < thumbnailCandidates.length - 1) {
+      setCandidateIndex((prev) => prev + 1);
+    } else {
+      setThumbnailFailed(true);
+    }
+  };
+
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -173,16 +219,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         <div className="relative aspect-video w-full overflow-hidden bg-slate-900 block">
           <Link to={`/watch/${video.id}`} className="absolute inset-0 z-0 block" aria-label={video.title}>
             <img
-              src={imgFailed ? 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80' : imgSrc}
+              src={currentThumbSrc}
               alt={video.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               loading="lazy"
-              onError={() => {
-                if (!imgFailed) {
-                  setImgFailed(true);
-                  setImgSrc('https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80');
-                }
-              }}
+              decoding="async"
+              onError={handleThumbError}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
 
@@ -440,6 +482,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     </>
   );
 };
+
+export const VideoCard = React.memo(VideoCardComponent);
 
 export const VideoCardSkeleton: React.FC = () => {
   return (

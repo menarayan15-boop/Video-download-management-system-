@@ -14,6 +14,15 @@ class ApiError extends Error {
   }
 }
 
+// In-memory cache for video metadata to eliminate duplicate fetches
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+const videoCache = new Map<string, CacheEntry<any>>();
+const inFlightRequests = new Map<string, Promise<any>>();
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('vyntra_token');
 
@@ -55,6 +64,17 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
+  // Synchronous cache lookup for instant initial rendering
+  getCachedVideo: (id: string): any | null => {
+    const entry = videoCache.get(id);
+    if (!entry) return null;
+    if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+      videoCache.delete(id);
+      return null;
+    }
+    return entry.data?.video || null;
+  },
+
   // Auth
   register: (body: any) => request<any>('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: any) => request<any>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
@@ -73,10 +93,44 @@ export const api = {
     }
     return request<any>(`/videos?${searchParams.toString()}`);
   },
-  getVideoById: (id: string) => request<any>(`/videos/${id}`),
+  getVideoById: (id: string, options?: { signal?: AbortSignal; bypassCache?: boolean }) => {
+    // 1. Check in-memory cache
+    if (!options?.bypassCache) {
+      const cached = videoCache.get(id);
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        return Promise.resolve(cached.data);
+      }
+    }
+
+    // 2. Check if identical request is already in-flight (deduplicate)
+    const inFlightKey = `video_${id}`;
+    if (inFlightRequests.has(inFlightKey)) {
+      return inFlightRequests.get(inFlightKey)!;
+    }
+
+    const promise = request<any>(`/videos/${id}`, { signal: options?.signal })
+      .then((data) => {
+        if (data) {
+          videoCache.set(id, { data, timestamp: Date.now() });
+        }
+        return data;
+      })
+      .finally(() => {
+        inFlightRequests.delete(inFlightKey);
+      });
+
+    inFlightRequests.set(inFlightKey, promise);
+    return promise;
+  },
   createVideo: (body: any) => request<any>('/videos', { method: 'POST', body: JSON.stringify(body) }),
-  updateVideo: (id: string, body: any) => request<any>(`/videos/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  deleteVideo: (id: string) => request<any>(`/videos/${id}`, { method: 'DELETE' }),
+  updateVideo: (id: string, body: any) => {
+    videoCache.delete(id);
+    return request<any>(`/videos/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  },
+  deleteVideo: (id: string) => {
+    videoCache.delete(id);
+    return request<any>(`/videos/${id}`, { method: 'DELETE' });
+  },
   getCategories: () => request<any[]>('/categories'),
 
   // Social

@@ -529,7 +529,12 @@ export default async function handler(req, res) {
   const singleVideoMatch = pathname.match(/\/videos\/([^/?#]+)$/);
   if (singleVideoMatch) {
     const videoId = singleVideoMatch[1];
-    let foundVideo = videos.find((v) => v.id === videoId || v.slug === videoId);
+    let foundVideo = videos.find(
+      (v) => v.id === videoId || v.slug === videoId || v.providerVideoId === videoId
+    );
+    if (!foundVideo && (videoId === '5033eb6b-neural-networks-05' || videoId.includes('neural-networks'))) {
+      foundVideo = videos.find((v) => v.id === '5033eb6b-e4cb-4409-8a23-2a2df25bb765');
+    }
     if (!foundVideo) {
       // Find fallback video or adapt first video with requested ID
       foundVideo = {
@@ -538,6 +543,7 @@ export default async function handler(req, res) {
       };
     }
     const related = videos.filter((v) => v.id !== foundVideo.id).slice(0, 6);
+    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
     return res.status(200).json({
       success: true,
       data: {
@@ -553,8 +559,55 @@ export default async function handler(req, res) {
     });
   }
 
-  // 11. Videos List: /videos
-  if (pathname.includes('/videos')) {
+  // 10. Social Interactions & Comments (MUST MATCH BEFORE /videos list)
+  if (pathname.includes('/comments')) {
+    return res.status(200).json({ success: true, data: [] });
+  }
+  if (pathname.includes('/like')) {
+    return res.status(200).json({ success: true, data: { liked: true } });
+  }
+  if (pathname.includes('/save')) {
+    return res.status(200).json({ success: true, data: { saved: true } });
+  }
+  if (pathname.includes('/follow')) {
+    return res.status(200).json({ success: true, data: { following: true } });
+  }
+  if (pathname.includes('/watch-progress')) {
+    return res.status(200).json({ success: true, data: { recorded: true } });
+  }
+
+  // 11. Learning Tools Endpoints
+  if (pathname.includes('/study-helper')) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        summary: 'Comprehensive intuitive guide covering key concepts, foundational principles, and practical examples.',
+        explanation: 'Step-by-step breakdown designed for self-paced study, revision, and deeper conceptual retention.',
+        takeaways: [
+          'Understand core mathematical and conceptual foundations from first principles.',
+          'Identify real-world applications and architectural patterns.',
+          'Consolidate understanding with active recall and self-assessment.',
+        ],
+        terminology: [
+          { term: 'Core Model', definition: 'Foundational structure representing system behavior.' },
+          { term: 'Optimization', definition: 'Mathematical tuning of parameters to minimize objective loss.' },
+        ],
+        revisionQuestions: [
+          'What are the primary components of this topic?',
+          'How does parameter tuning influence performance?',
+        ],
+      },
+    });
+  }
+  if (pathname.includes('/bookmarks')) {
+    return res.status(200).json({ success: true, data: [] });
+  }
+  if (pathname.includes('/notes')) {
+    return res.status(200).json({ success: true, data: [] });
+  }
+
+  // 12. Videos List: /videos (ONLY when not social/learning)
+  if (pathname.includes('/videos') && !pathname.includes('/social') && !pathname.includes('/learning')) {
     const search = url.searchParams.get('search')?.toLowerCase();
     const categorySlug = url.searchParams.get('category');
     const sort = url.searchParams.get('sort');
@@ -580,20 +633,6 @@ export default async function handler(req, res) {
         pagination: { total: filtered.length, page: 1, limit: 12 },
       },
     });
-  }
-
-  // 12. Social Interactions
-  if (pathname.includes('/like')) {
-    return res.status(200).json({ success: true, data: { liked: true } });
-  }
-  if (pathname.includes('/save')) {
-    return res.status(200).json({ success: true, data: { saved: true } });
-  }
-  if (pathname.includes('/follow')) {
-    return res.status(200).json({ success: true, data: { following: true } });
-  }
-  if (pathname.includes('/comments')) {
-    return res.status(200).json({ success: true, data: [] });
   }
 
   // 13. Auth Check Fallback
