@@ -135,14 +135,7 @@ export const App: React.FC = () => {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/subscriptions"
-          element={
-            <ProtectedRoute>
-              <SubscriptionPlansPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/subscriptions" element={<SubscriptionPlansPage />} />
         <Route
           path="/checkout/:planId"
           element={

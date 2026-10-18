@@ -4,13 +4,16 @@ import { CreditCard, CheckCircle2, ShieldCheck, ArrowLeft, AlertCircle, Sparkles
 import { SubscriptionPlan } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { FALLBACK_SUBSCRIPTION_PLANS } from '../data/seedData';
 
 export const CheckoutPage: React.FC = () => {
   const { planId } = useParams<{ planId: string }>();
   const { user, refreshAuth } = useAuth();
   const navigate = useNavigate();
 
-  const [plan, setPlan] = useState<SubscriptionPlan | null>(null);
+  const [plan, setPlan] = useState<SubscriptionPlan | null>(() => {
+    return FALLBACK_SUBSCRIPTION_PLANS.find((p) => p.id === planId || p.name === planId) || null;
+  });
   const [billingCycle, setBillingCycle] = useState<'MONTHLY' | 'DAILY'>('MONTHLY');
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -23,12 +26,20 @@ export const CheckoutPage: React.FC = () => {
     }
 
     api.getPlans().then((plans) => {
-      const found = plans?.find((p) => p.id === planId);
+      const allPlans = Array.isArray(plans) && plans.length > 0 ? plans : FALLBACK_SUBSCRIPTION_PLANS;
+      const found = allPlans.find((p) => p.id === planId || p.name === planId);
       if (found) {
-        setPlan(found);
-      } else {
+        setPlan({
+          ...found,
+          features: typeof found.features === 'string' ? JSON.parse(found.features) : found.features || [],
+        });
+      } else if (!plan) {
         navigate('/pricing');
       }
+    }).catch(() => {
+      const fallback = FALLBACK_SUBSCRIPTION_PLANS.find((p) => p.id === planId || p.name === planId);
+      if (fallback) setPlan(fallback);
+      else if (!plan) navigate('/pricing');
     });
   }, [planId, user, navigate]);
 

@@ -1,4 +1,4 @@
-import { Video, Category } from '../types';
+import { Video, Category, SubscriptionPlan } from '../types';
 
 export const FALLBACK_CATEGORIES: Category[] = [
   {
@@ -528,4 +528,100 @@ export const FALLBACK_HEALTH_VIDEOS: Video[] = [
       icon: 'HeartPulse',
     },
   }),
+];
+
+export const ALL_FALLBACK_VIDEOS: Video[] = [
+  ...FALLBACK_FEATURED_VIDEOS,
+  ...FALLBACK_TRENDING_VIDEOS,
+  ...FALLBACK_RECENT_VIDEOS,
+  ...FALLBACK_SPACE_VIDEOS,
+  ...FALLBACK_TECH_VIDEOS,
+  ...FALLBACK_NATURE_VIDEOS,
+  ...FALLBACK_HEALTH_VIDEOS,
+];
+
+export function findFallbackVideo(id: string): Video | undefined {
+  return ALL_FALLBACK_VIDEOS.find((v) => v.id === id);
+}
+
+export const FALLBACK_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
+  {
+    id: '7e593ef9-f76b-4aa2-ad4a-0d5bbb9418ed',
+    name: 'FREE',
+    displayName: 'Free Starter',
+    price: 0,
+    billingInterval: 'DAILY',
+    downloadLimit: 1,
+    quotaPeriod: 'DAILY',
+    deviceLimit: 1,
+    badgeColor: '#9CA3AF',
+    isActive: true,
+    features: [
+      '1 Video Download per day',
+      'Standard 720p & 1080p Streaming',
+      'Full Community Access & Comments',
+      'Multilingual Comment Translations',
+      '1 Registered Device',
+    ],
+  },
+  {
+    id: '8fcf43e3-640e-47ae-ab7a-9adaa95e12e6',
+    name: 'BRONZE',
+    displayName: 'Bronze Creator',
+    price: 199,
+    billingInterval: 'MONTHLY',
+    downloadLimit: 10,
+    quotaPeriod: 'DAILY',
+    deviceLimit: 2,
+    badgeColor: '#CD7F32',
+    isActive: true,
+    features: [
+      '10 Video Downloads per day',
+      'Full HD 1080p Downloads & Streaming',
+      'Priority Fast-Track Download Speeds',
+      'Follow Unlimited Creators',
+      '2 Registered Devices',
+      'Ad-free Playback Experience',
+    ],
+  },
+  {
+    id: '2d0120fb-ea3a-4a70-80f2-252d18731ca5',
+    name: 'SILVER',
+    displayName: 'Silver Pro',
+    price: 499,
+    billingInterval: 'MONTHLY',
+    downloadLimit: 25,
+    quotaPeriod: 'DAILY',
+    deviceLimit: 4,
+    badgeColor: '#94A3B8',
+    isActive: true,
+    features: [
+      '25 Video Downloads per day',
+      'Ultra HD 4K Support',
+      'High-Speed CDN Delivery',
+      'Early Access to Exclusive Content',
+      '4 Registered Devices',
+      'Creator Direct Interaction Perks',
+    ],
+  },
+  {
+    id: 'ce7751e6-a0aa-4e2f-943d-03550d12575d',
+    name: 'GOLD',
+    displayName: 'Gold VIP',
+    price: 999,
+    billingInterval: 'MONTHLY',
+    downloadLimit: 100,
+    quotaPeriod: 'DAILY',
+    deviceLimit: 10,
+    badgeColor: '#F59E0B',
+    isActive: true,
+    features: [
+      '100 Video Downloads per day',
+      'Maximum Bitrate & Master Audio Quality',
+      'Unrestricted Instant Batch Transfers',
+      'VIP Creator Community Badge',
+      'Up to 10 Registered Devices',
+      'Dedicated Priority Support',
+    ],
+  },
 ];

@@ -11,17 +11,27 @@ import {
 import { SubscriptionPlan, UserSubscription } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { FALLBACK_SUBSCRIPTION_PLANS } from '../data/seedData';
 
 export const SubscriptionPlansPage: React.FC = () => {
   const { user, subscription, refreshAuth } = useAuth();
   const navigate = useNavigate();
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>(FALLBACK_SUBSCRIPTION_PLANS);
+  const [isLoading, setIsLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     api.getPlans()
-      .then((data) => setPlans(data || []))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const normalized = data.map((p) => ({
+            ...p,
+            features: typeof p.features === 'string' ? JSON.parse(p.features) : p.features || [],
+          }));
+          setPlans(normalized);
+        }
+      })
+      .catch(() => {})
       .finally(() => setIsLoading(false));
   }, []);
 

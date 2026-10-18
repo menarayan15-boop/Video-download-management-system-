@@ -23,13 +23,16 @@ import { VideoCard } from '../components/video/VideoCard';
 import { AddToPlaylistModal } from '../components/video/AddToPlaylistModal';
 import { ReportVideoModal } from '../components/video/ReportVideoModal';
 import { LearningToolsPanel } from '../components/video/LearningToolsPanel';
+import { findFallbackVideo, FALLBACK_FEATURED_VIDEOS, FALLBACK_TRENDING_VIDEOS } from '../data/seedData';
 
 export const WatchPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [video, setVideo] = useState<Video | null>(null);
+  const [video, setVideo] = useState<Video | null>(() => {
+    return id ? findFallbackVideo(id) || null : null;
+  });
   const [userState, setUserState] = useState<{
     isLiked: boolean;
     isSaved: boolean;
@@ -48,18 +51,44 @@ export const WatchPage: React.FC = () => {
   const [showReportModal, setShowReportModal] = useState(false);
   const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
   const [seekTarget, setSeekTarget] = useState<number | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (id) {
-      setIsLoading(true);
+      const initialFallback = findFallbackVideo(id);
+      if (initialFallback) {
+        setVideo(initialFallback);
+        setRelatedVideos(FALLBACK_TRENDING_VIDEOS.filter((v) => v.id !== initialFallback.id));
+      }
+
       api.getVideoById(id)
         .then((res) => {
-          setVideo(res.video);
-          setUserState(res.userState);
-          setRelatedVideos(res.relatedVideos || []);
+          if (res && res.video) {
+            setVideo(res.video);
+            setUserState(
+              res.userState || {
+                isLiked: false,
+                isSaved: false,
+                isFollowingCreator: false,
+                watchProgress: null,
+              }
+            );
+            if (Array.isArray(res.relatedVideos) && res.relatedVideos.length > 0) {
+              setRelatedVideos(res.relatedVideos);
+            }
+          } else if (!video) {
+            const fb = findFallbackVideo(id) || FALLBACK_FEATURED_VIDEOS[0];
+            setVideo(fb);
+            setRelatedVideos(FALLBACK_TRENDING_VIDEOS.filter((v) => v.id !== fb.id));
+          }
         })
-        .catch(() => setVideo(null))
+        .catch(() => {
+          if (!video) {
+            const fb = findFallbackVideo(id) || FALLBACK_FEATURED_VIDEOS[0];
+            setVideo(fb);
+            setRelatedVideos(FALLBACK_TRENDING_VIDEOS.filter((v) => v.id !== fb.id));
+          }
+        })
         .finally(() => setIsLoading(false));
     }
   }, [id]);

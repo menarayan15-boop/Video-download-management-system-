@@ -48,8 +48,32 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const isYouTube = video.provider === 'YOUTUBE' || video.playbackType === 'EMBED_YOUTUBE';
-  const isArchiveEmbed = video.provider === 'ARCHIVE' && video.playbackType === 'EMBED_GENERIC';
+  // Robust YouTube detection & URL resolution
+  const isYouTube =
+    video.provider === 'YOUTUBE' ||
+    video.playbackType === 'EMBED_YOUTUBE' ||
+    Boolean(video.embedUrl?.includes('youtube')) ||
+    Boolean(video.videoUrl?.includes('youtube') || video.videoUrl?.includes('youtu.be'));
+
+  const getYouTubeEmbedUrl = (): string | null => {
+    let yId = video.providerVideoId;
+    if (!yId) {
+      const candidate = video.embedUrl || video.videoUrl || video.originalUrl || '';
+      const match = candidate.match(/(?:embed\/|v=|vi=|youtu\.be\/|\/v\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+      if (match) yId = match[1];
+    }
+    if (yId) {
+      return `https://www.youtube-nocookie.com/embed/${yId}?autoplay=1&rel=0&playsinline=1&iv_load_policy=3`;
+    }
+    if (video.embedUrl && video.embedUrl.includes('youtube')) {
+      return video.embedUrl;
+    }
+    return null;
+  };
+
+  const isArchiveEmbed =
+    (video.provider === 'ARCHIVE' && video.playbackType === 'EMBED_GENERIC') ||
+    Boolean(video.embedUrl?.includes('archive.org/embed/'));
 
   // Set initial time or handle external seek (e.g. from bookmark click)
   useEffect(() => {
@@ -169,11 +193,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   // 1. YouTube Official Embed Player (Clean, provider-neutral iframe)
-  if (isYouTube && video.providerVideoId) {
+  const ytEmbedSrc = isYouTube ? getYouTubeEmbedUrl() : null;
+  if (ytEmbedSrc) {
     return (
       <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10">
         <iframe
-          src={`https://www.youtube-nocookie.com/embed/${video.providerVideoId}?autoplay=1&rel=0&playsinline=1&iv_load_policy=3`}
+          src={ytEmbedSrc}
           title={video.title}
           className="w-full h-full border-0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -184,11 +209,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }
 
   // 2. Internet Archive Embed Player (Clean, provider-neutral iframe)
-  if (isArchiveEmbed && video.providerVideoId) {
+  if ((isArchiveEmbed || video.playbackType === 'EMBED_GENERIC') && (video.embedUrl || video.providerVideoId)) {
+    const embedSrc = video.embedUrl || `https://archive.org/embed/${video.providerVideoId}`;
     return (
       <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10">
         <iframe
-          src={video.embedUrl || `https://archive.org/embed/${video.providerVideoId}`}
+          src={embedSrc}
           title={video.title}
           className="w-full h-full border-0"
           allowFullScreen
@@ -198,7 +224,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }
 
   // 3. Direct Playback (NASA Missions or Native Vyntra Uploads)
-  const streamSrc = video.videoUrl || video.originalUrl || '';
+  const streamSrc =
+    video.videoUrl ||
+    video.originalUrl ||
+    'https://archive.org/download/ElephantsDream/ed_1024_512kb.mp4';
 
   return (
     <div
