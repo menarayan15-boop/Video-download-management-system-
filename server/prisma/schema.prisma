@@ -128,6 +128,14 @@ model User {
   searchHistory      SearchHistory[]
   preference         UserPreference?
 
+  hostedWatchRooms       WatchRoom[]            @relation("HostWatchRooms")
+  watchRoomMemberships   WatchRoomMember[]
+  watchRoomInvites       WatchRoomInvite[]      @relation("CreatedWatchRoomInvites")
+  watchRoomMessages      WatchRoomMessage[]
+  watchRoomReactions     WatchRoomReaction[]
+  watchRoomQuizzes       WatchRoomQuiz[]        @relation("CreatedWatchRoomQuizzes")
+  watchRoomQuizResponses WatchRoomQuizResponse[]
+
   @@map("users")
 }
 
@@ -218,6 +226,7 @@ model Video {
   notes              VideoNote[]
   bookmarks          VideoBookmark[]
   recommendationFeedback RecommendationFeedback[]
+  watchRooms         WatchRoom[]
 
   @@unique([provider, providerVideoId])
   @@index([creatorId])
@@ -652,4 +661,181 @@ model UserPreference {
 
   @@map("user_preferences")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WATCH ROOMS — SYNCHRONIZED SOCIAL CO-WATCHING
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum RoomVisibility {
+  PUBLIC
+  PRIVATE
+  INVITE_ONLY
+}
+
+enum RoomStatus {
+  LIVE
+  SCHEDULED
+  ENDED
+}
+
+enum RoomRole {
+  HOST
+  MODERATOR
+  PARTICIPANT
+}
+
+enum ControllerPolicy {
+  HOST_ONLY
+  HOST_AND_MODS
+  ALL
+}
+
+model WatchRoom {
+  id                 String           @id @default(uuid())
+  hostUserId         String
+  name               String
+  description        String?          @db.Text
+  visibility         RoomVisibility   @default(PUBLIC)
+  status             RoomStatus       @default(LIVE)
+  videoId            String
+  videoSource        String           @default("VYNTRA") // YOUTUBE, NASA, ARCHIVE, VYNTRA
+  maxParticipants    Int              @default(20)
+  playbackStatus     String           @default("PAUSED") // PLAYING, PAUSED
+  playbackPosition   Float            @default(0)
+  playbackRate       Float            @default(1.0)
+  playbackUpdatedAt  DateTime         @default(now())
+  playbackVersion    Int              @default(1)
+  controllerPolicy   ControllerPolicy @default(HOST_ONLY)
+  chatEnabled        Boolean          @default(true)
+  reactionsEnabled   Boolean          @default(true)
+  quizEnabled        Boolean          @default(false)
+  passwordHash       String?
+  scheduledAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  endedAt            DateTime?
+
+  hostUser  User                  @relation("HostWatchRooms", fields: [hostUserId], references: [id], onDelete: Cascade)
+  video     Video                 @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  members   WatchRoomMember[]
+  invites   WatchRoomInvite[]
+  messages  WatchRoomMessage[]
+  reactions WatchRoomReaction[]
+  quizzes   WatchRoomQuiz[]
+
+  @@index([hostUserId])
+  @@index([visibility, status])
+  @@index([videoId])
+  @@map("watch_rooms")
+}
+
+model WatchRoomMember {
+  id               String   @id @default(uuid())
+  roomId           String
+  userId           String
+  role             RoomRole @default(PARTICIPANT)
+  isMuted          Boolean  @default(false)
+  joinedAt         DateTime @default(now())
+  lastSeenAt       DateTime @default(now())
+  leftAt           DateTime?
+  membershipStatus String   @default("ACTIVE") // ACTIVE, LEFT, KICKED
+
+  room WatchRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([roomId, membershipStatus])
+  @@index([userId])
+  @@map("watch_room_members")
+}
+
+model WatchRoomInvite {
+  id        String    @id @default(uuid())
+  roomId    String
+  tokenHash String    @unique
+  code      String    @unique
+  createdBy String
+  maxUses   Int?      @default(100)
+  useCount  Int       @default(0)
+  expiresAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  room    WatchRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  creator User      @relation("CreatedWatchRoomInvites", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@map("watch_room_invites")
+}
+
+model WatchRoomMessage {
+  id             String    @id @default(uuid())
+  roomId         String
+  userId         String?
+  message        String    @db.Text
+  isSystem       Boolean   @default(false)
+  videoTimestamp Float?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  room WatchRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, createdAt])
+  @@map("watch_room_messages")
+}
+
+model WatchRoomReaction {
+  id             String   @id @default(uuid())
+  roomId         String
+  userId         String
+  reactionType   String   // HEART, JOY, FIRE, APPLAUSE, SURPRISED
+  videoTimestamp Float?
+  createdAt      DateTime @default(now())
+
+  room WatchRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+  @@map("watch_room_reactions")
+}
+
+model WatchRoomQuiz {
+  id               String    @id @default(uuid())
+  roomId           String
+  createdBy        String
+  question         String    @db.Text
+  optionsJson      String    @db.Text // JSON string array of choices
+  correctAnswer    Int       // 0-indexed choice
+  triggerTimestamp Float?
+  timeLimitSeconds Int       @default(30)
+  status           String    @default("ACTIVE") // ACTIVE, REVEALED, CLOSED
+  createdAt        DateTime  @default(now())
+  revealedAt       DateTime?
+
+  room      WatchRoom               @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  creator   User                    @relation("CreatedWatchRoomQuizzes", fields: [createdBy], references: [id], onDelete: Cascade)
+  responses WatchRoomQuizResponse[]
+
+  @@index([roomId, status])
+  @@map("watch_room_quizzes")
+}
+
+model WatchRoomQuizResponse {
+  id             String   @id @default(uuid())
+  quizId         String
+  userId         String
+  selectedAnswer Int
+  isCorrect      Boolean
+  submittedAt    DateTime @default(now())
+
+  quiz WatchRoomQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, userId])
+  @@index([quizId])
+  @@map("watch_room_quiz_responses")
+}
+
 

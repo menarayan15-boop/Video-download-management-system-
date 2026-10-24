@@ -24,6 +24,8 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       token = authHeader.split(' ')[1];
     } else if (req.cookies && req.cookies.vyntra_token) {
       token = req.cookies.vyntra_token;
+    } else if (req.query && typeof req.query.token === 'string') {
+      token = req.query.token;
     }
 
     if (!token) {

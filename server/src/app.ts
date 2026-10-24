@@ -18,6 +18,7 @@ import recommendationRoutes from './modules/recommendations/recommendation.route
 import playlistRoutes from './modules/playlists/playlist.routes.js';
 import learningRoutes from './modules/learning/learning.routes.js';
 import preferenceRoutes from './modules/preferences/preference.routes.js';
+import watchRoomRoutes from './modules/watchRooms/watchRoom.routes.js';
 import { discoveryRouter, adminDiscoveryRouter } from './modules/discovery/discovery.controller.js';
 import {
   getFeaturedVideo,
@@ -90,6 +91,7 @@ export const createApp = () => {
   app.use('/api/v1/preferences', preferenceRoutes);
   app.use('/api/v1/notifications', notificationRoutes);
   app.use('/api/v1/translate', translationRoutes);
+  app.use('/api/v1/watch-rooms', watchRoomRoutes);
   app.use('/api/v1/admin/discovery', adminDiscoveryRouter);
   app.use('/api/v1/admin', adminRoutes);
   app.use('/api/v1', discoveryRouter);

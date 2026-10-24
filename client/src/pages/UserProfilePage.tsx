@@ -689,23 +689,6 @@ export const UserProfilePage: React.FC = () => {
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Language */}
-                <div>
-                  <label className="block text-gray-300 font-semibold mb-1">Interface Language</label>
-                  <select
-                    value={preferences.language}
-                    onChange={(e) => updatePreference('language', e.target.value)}
-                    className="w-full p-2.5 rounded-xl glass-input bg-[#111827]"
-                  >
-                    <option value="en">English (Default)</option>
-                    <option value="es">Español (Spanish)</option>
-                    <option value="fr">Français (French)</option>
-                    <option value="de">Deutsch (German)</option>
-                    <option value="hi">हिन्दी (Hindi)</option>
-                    <option value="ja">日本語 (Japanese)</option>
-                  </select>
-                </div>
-
                 {/* Font Size */}
                 <div>
                   <label className="block text-gray-300 font-semibold mb-1">Text Scaling</label>

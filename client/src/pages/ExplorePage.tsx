@@ -13,7 +13,6 @@ import {
   History,
   Trash2,
   Calendar,
-  Globe,
   RotateCcw,
 } from 'lucide-react';
 import { Video, Category, Subcategory } from '../types';
@@ -43,7 +42,6 @@ export const ExplorePage: React.FC = () => {
   const initialSort = searchParams.get('sort') || 'newest';
   const initialDuration = searchParams.get('duration') || '';
   const initialDateRange = searchParams.get('dateRange') || '';
-  const initialLanguage = searchParams.get('language') || '';
 
   const [videos, setVideos] = useState<Video[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -53,7 +51,6 @@ export const ExplorePage: React.FC = () => {
   const [sortBy, setSortBy] = useState(initialSort);
   const [duration, setDuration] = useState(initialDuration);
   const [dateRange, setDateRange] = useState(initialDateRange);
-  const [language, setLanguage] = useState(initialLanguage);
 
   const [searchTerm, setSearchTerm] = useState(query);
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
@@ -130,7 +127,6 @@ export const ExplorePage: React.FC = () => {
     sortBy,
     duration,
     dateRange,
-    language,
   ]);
 
   const fetchVideos = async (page = 1) => {
@@ -147,7 +143,6 @@ export const ExplorePage: React.FC = () => {
         sortBy,
         duration: duration || undefined,
         dateRange: dateRange || undefined,
-        language: language || undefined,
         page,
         limit: 16,
       });
@@ -212,7 +207,6 @@ export const ExplorePage: React.FC = () => {
     setSortBy('newest');
     setDuration('');
     setDateRange('');
-    setLanguage('');
     setSearchParams({});
   };
 
@@ -243,7 +237,6 @@ export const ExplorePage: React.FC = () => {
     selectedProvider ||
     duration ||
     dateRange ||
-    language ||
     sortBy !== 'newest'
   );
 
@@ -441,18 +434,6 @@ export const ExplorePage: React.FC = () => {
                 </button>
               </span>
             )}
-            {language && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-900/40 text-purple-200 text-[11px] border border-purple-500/30">
-                Lang: {language.toUpperCase()}
-                <button
-                  onClick={() => setLanguage('')}
-                  aria-label="Remove language filter"
-                  className="hover:text-white p-0.5"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
             {sortBy !== 'newest' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-900/40 text-purple-200 text-[11px] border border-purple-500/30">
                 Sort: {sortBy}
@@ -605,25 +586,6 @@ export const ExplorePage: React.FC = () => {
                 <option value="this_year">Past Year</option>
               </select>
             </div>
-
-            {/* Language Filter */}
-            <div className="flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-purple-400" />
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1 text-white text-xs focus:outline-none focus:border-purple-500"
-                aria-label="Language filter"
-              >
-                <option value="">All Languages</option>
-                <option value="en">English</option>
-                <option value="es">Spanish</option>
-                <option value="fr">French</option>
-                <option value="de">German</option>
-                <option value="hi">Hindi</option>
-                <option value="ja">Japanese</option>
-              </select>
-            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -724,24 +686,6 @@ export const ExplorePage: React.FC = () => {
                   <option value="this_week">Past Week</option>
                   <option value="this_month">Past Month</option>
                   <option value="this_year">Past Year</option>
-                </select>
-              </div>
-
-              {/* Language Filter */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-300">Audio / Subtitle Language</label>
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
-                >
-                  <option value="">All Languages</option>
-                  <option value="en">English</option>
-                  <option value="es">Spanish</option>
-                  <option value="fr">French</option>
-                  <option value="de">German</option>
-                  <option value="hi">Hindi</option>
-                  <option value="ja">Japanese</option>
                 </select>
               </div>
 

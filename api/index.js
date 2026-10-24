@@ -635,7 +635,75 @@ export default async function handler(req, res) {
     });
   }
 
-  // 13. Auth Check Fallback
+  // 13. Watch Rooms Serverless Endpoints
+  if (pathname.includes('/watch-rooms')) {
+    const sampleRoom = {
+      id: 'room-ai-exploration-01',
+      name: 'Neural Networks Live Study & Synchronized Review',
+      description: 'Synchronized watch session exploring mathematical foundations of neural networks and deep learning.',
+      visibility: 'PUBLIC',
+      status: 'LIVE',
+      videoId: '5033eb6b-e4cb-4409-8a23-2a2df25bb765',
+      video: videos.find((v) => v.id === '5033eb6b-e4cb-4409-8a23-2a2df25bb765') || videos[1],
+      host: {
+        id: 'gate_smashers',
+        username: 'gate_smashers',
+        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      },
+      maxParticipants: 50,
+      participantCount: 12,
+      controllerPolicy: 'HOST_ONLY',
+      chatEnabled: true,
+      reactionsEnabled: true,
+      quizEnabled: true,
+      code: 'VY-AI01',
+      inviteToken: 'token_ai_live_room',
+      playback: {
+        status: 'PAUSED',
+        position: 0,
+        rate: 1.0,
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        updatedBy: { id: 'gate_smashers', username: 'gate_smashers' },
+      },
+      userRole: 'PARTICIPANT',
+      isMember: true,
+      createdAt: '2026-10-18T10:00:00.000Z',
+    };
+
+    if (req.method === 'POST' && pathname.endsWith('/watch-rooms')) {
+      return res.status(201).json({ success: true, data: sampleRoom });
+    }
+
+    if (pathname.includes('/join')) {
+      return res.status(200).json({ success: true, data: { roomId: sampleRoom.id, room: sampleRoom } });
+    }
+
+    if (pathname.includes('/playback')) {
+      return res.status(200).json({ success: true, data: sampleRoom.playback });
+    }
+
+    if (pathname.includes('/messages')) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    if (pathname.includes('/reactions')) {
+      return res.status(200).json({ success: true });
+    }
+
+    if (pathname.includes('/quizzes')) {
+      return res.status(200).json({ success: true });
+    }
+
+    const roomMatch = pathname.match(/\/watch-rooms\/([^/?#]+)$/);
+    if (roomMatch && roomMatch[1] !== 'my-rooms') {
+      return res.status(200).json({ success: true, data: sampleRoom });
+    }
+
+    return res.status(200).json({ success: true, data: [sampleRoom] });
+  }
+
+  // 14. Auth Check Fallback
   if (pathname.includes('/auth/me')) {
     return res.status(200).json({ success: true, data: null });
   }

@@ -17,11 +17,9 @@ import {
   ListPlus,
   Clock,
   X,
-  Languages,
   Eye,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { usePreferences } from '../../context/PreferencesContext';
 import { api } from '../../services/api';
 import { NotificationItem, SearchHistoryItem } from '../../types';
 
@@ -32,7 +30,6 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onOpenUpload }) => {
   const { user, quota, isCreator, isAdmin, logout } = useAuth();
-  const { preferences, updatePreferences, currentLang, setLanguage } = usePreferences();
   const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,14 +39,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onOpenUpload })
 
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showLangMenu, setShowLangMenu] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
-  const langRef = useRef<HTMLDivElement>(null);
 
   // Load notifications and unread count
   useEffect(() => {
@@ -95,9 +90,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onOpenUpload })
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setShowSearchDropdown(false);
       }
-      if (langRef.current && !langRef.current.contains(e.target as Node)) {
-        setShowLangMenu(false);
-      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -141,15 +133,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onOpenUpload })
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch (e) {}
   };
-
-  const LANGUAGES = [
-    { code: 'en', label: 'English (US)' },
-    { code: 'hi', label: 'हिन्दी (Hindi)' },
-    { code: 'es', label: 'Español (Spanish)' },
-    { code: 'fr', label: 'Français (French)' },
-    { code: 'de', label: 'Deutsch (German)' },
-    { code: 'ja', label: '日本語 (Japanese)' },
-  ];
 
   return (
     <header className="sticky top-0 z-40 w-full h-16 border-b border-white/10 bg-[#0B0F19]/80 backdrop-blur-md px-4 lg:px-6 flex items-center justify-between gap-4">
@@ -294,48 +277,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onOpenUpload })
         >
           <Search className="w-5 h-5" />
         </button>
-
-        {/* Language Selector Popover */}
-        <div className="relative" ref={langRef}>
-          <button
-            onClick={() => setShowLangMenu(!showLangMenu)}
-            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors flex items-center gap-1"
-            title="Language Preferences"
-            aria-label="Select Language"
-          >
-            <Languages className="w-4 h-4" />
-            <span className="text-[11px] uppercase font-bold text-gray-300 hidden sm:inline">
-              {currentLang}
-            </span>
-          </button>
-
-          {showLangMenu && (
-            <div className="glass-dropdown absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-[200px] rounded-2xl p-2 shadow-2xl z-50 text-xs border border-white/10">
-              <p className="px-2 py-1 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                Interface Language
-              </p>
-              <div className="space-y-0.5 mt-1">
-                {LANGUAGES.map((lang) => (
-                  <button
-                    key={lang.code}
-                    onClick={() => {
-                      setLanguage(lang.code);
-                      setShowLangMenu(false);
-                    }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors ${
-                      currentLang === lang.code
-                        ? 'bg-purple-600/30 text-purple-300 font-bold'
-                        : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    <span>{lang.label}</span>
-                    {currentLang === lang.code && <span>✓</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
 
         {user ? (
           <>
